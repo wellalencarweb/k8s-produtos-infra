@@ -1,2 +1,2 @@
-# k8s-produtos-infra
-Gerenciar os recursos de Kubernetes específicos para o serviço de produtos.
+# infra-k8s-resources (Produtos)
+Repositório para administrar os recursos Kubernetes do projeto Tech Challenge.

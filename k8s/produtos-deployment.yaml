@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: produtos-deployment
+  labels:
+    app: produtos-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: produtos-deployment
+  template:
+    metadata:
+      labels:
+        app: produtos-deployment
+    spec:
+      containers:
+        - name: app
+          image: wellalencar/app-fast-food-produtos:latest
+          command: ["sh", "-c", "npm run generate && npm run migrate && npm run start"]
+          ports:
+            - containerPort: 6002
+          resources:
+            requests:
+              cpu: 333m
+            limits:
+              cpu: 999m
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                secretKeyRef:
+                  name: secret-produtos
+                  key: NODE_ENV
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: secret-produtos
+                  key: POSTGRES_DB
+            - name: POSTGRES_DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: secret-produtos
+                  key: POSTGRES_DB_HOST                  
+            - name: POSTGRES_DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: secret-produtos
+                  key: POSTGRES_DB_PORT
+            - name: POSTGRES_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: secret-produtos
+                  key: POSTGRES_DB_USER
+            - name: POSTGRES_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: secret-produtos
+                  key: POSTGRES_DB_PASSWORD                  

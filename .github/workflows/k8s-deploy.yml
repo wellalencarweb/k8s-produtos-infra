@@ -1,0 +1,78 @@
+name: "Deploy to Kubernetes"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  deploy:
+    name: Deploy to Kubernetes (EKS)
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS Credentials Action For GitHub Actions
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+    
+    - name: Create kubeconfig
+      run: |
+        mkdir ${HOME}/.kube
+        echo ${{ secrets.KUBE_CONFIG }} | base64 --decode > ${HOME}/.kube/config
+        cat ${HOME}/.kube/config
+    
+    - name: Use context
+      run: kubectl config use-context ${{ secrets.KUBE_CONTEXT }}
+    
+    - name: Validate Kubernetes Manifests
+      if: github.event_name == 'pull_request'
+      run: |
+        kubectl apply --dry-run=client -f secret-opaque.yaml
+        kubectl apply --dry-run=client -f k8s/
+      continue-on-error: false
+
+    - name: Install kubeval
+      if: github.event_name == 'pull_request'
+      run: |
+        curl -LO https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
+        tar xf kubeval-linux-amd64.tar.gz
+        sudo mv kubeval /usr/local/bin
+      shell: bash
+
+    - name: Validate Manifests with kubeval
+      if: github.event_name == 'pull_request'
+      run: |
+        kubeval secret-opaque.yaml
+        for file in k8s/*.yaml; do
+          kubeval $file
+        done
+      continue-on-error: false
+    
+    - name: Update secret-opaque.yaml
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: fjogeleit/yaml-update-action@main
+      with:
+        valueFile: 'secret-opaque.yaml'
+        changes: |
+          {
+            "stringData['NODE_ENV']": "${{ secrets.NODE_ENV }}",
+            "stringData['POSTGRES_DB']": "${{ secrets.POSTGRES_DB }}",
+            "stringData['POSTGRES_DB_HOST']": "${{ secrets.POSTGRES_DB_HOST }}",
+            "stringData['POSTGRES_DB_USER']": "${{ secrets.POSTGRES_DB_USER }}",
+            "stringData['POSTGRES_DB_PASSWORD']": "${{ secrets.POSTGRES_DB_PASSWORD }}",
+            "data['POSTGRES_DB_PORT']": "${{ secrets.POSTGRES_DB_PORT }}"
+          }
+        commitChange: false
+
+    - name: Deploy Kubernetes Manifests
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        kubectl apply -f secret-opaque.yaml
+        kubectl apply -f k8s/
+
